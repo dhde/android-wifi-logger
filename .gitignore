@@ -3,7 +3,12 @@
 /local.properties
 /.idea/caches
 /.idea/libraries
-/.idea/modules.xml
+/*.jks
+/*.keystore
+/*.old
+/keystore.properties
+*.hprof
+.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
