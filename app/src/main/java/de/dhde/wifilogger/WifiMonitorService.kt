@@ -121,8 +121,8 @@ class WifiMonitorService : LifecycleService() {
             val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
             val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
             
-            val netStatus = if (isNetValidated) "Internet OK" else "Internet eingeschränkt"
-            val reachability = "v4: $resDns4 | v6: $resDns6 | $netStatus"
+            val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
+            val reachability = "Ping DNS v4: $resDns4 | v6: $resDns6 | $netStatus"
             
             val wasOtherSsid = currentSsid != null && currentSsid != ssid
             dao.insert(WifiEvent(
@@ -166,8 +166,8 @@ class WifiMonitorService : LifecycleService() {
                     
                     val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
                     val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
-                    val netStatus = if (isNetValidated) "Internet OK" else "Internet eingeschränkt"
-                    val reachability = "v4: $resDns4 | v6: $resDns6 | $netStatus"
+                    val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
+                    val reachability = "Ping DNS v4: $resDns4 | v6: $resDns6 | $netStatus"
 
                     dao.insert(WifiEvent(
                         eventType = EventType.ROAMING, ssid = ssid,
@@ -219,8 +219,8 @@ class WifiMonitorService : LifecycleService() {
                 val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
                 val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
                 
-                val netStatus = if (isNetValidated) "Internet OK" else "Internet eingeschränkt"
-                val reachability = "v4: $resDns4 | v6: $resDns6 | $netStatus"
+                val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
+                val reachability = "Ping DNS v4: $resDns4 | v6: $resDns6 | $netStatus"
                 
                 dao.insert(WifiEvent(
                     eventType = EventType.IP_CHANGE, ssid = currentSsid,
@@ -242,14 +242,14 @@ class WifiMonitorService : LifecycleService() {
             try {
                 java.net.Socket().use { s ->
                     s.connect(java.net.InetSocketAddress(inet, 53), 1500)
-                    return "OK"
+                    return "✅"
                 }
             } catch (_: Exception) {}
 
             // Methode 2: TCP via SocketFactory (network-gebunden)
             try {
                 val s = network?.socketFactory?.createSocket() ?: java.net.Socket()
-                s.use { it.connect(java.net.InetSocketAddress(inet, 53), 1500); return "OK" }
+                s.use { it.connect(java.net.InetSocketAddress(inet, 53), 1500); return "✅" }
             } catch (_: Exception) {}
 
             // Methode 3: Echter DNS UDP-Request
@@ -265,14 +265,14 @@ class WifiMonitorService : LifecycleService() {
                 udp.send(java.net.DatagramPacket(q, q.size, inet, 53))
                 udp.receive(java.net.DatagramPacket(ByteArray(512), 512))
                 udp.close()
-                return "OK"
+                return "✅"
             } catch (_: Exception) {}
 
             // Methode 4: Ping Fallback
             val pingHost = if (host.startsWith("fe80") && !host.contains("%")) "$host%wlan0" else host
-            if (Runtime.getRuntime().exec("ping -c 1 -W 2 $pingHost").waitFor() == 0) "OK" else "Fail"
+            if (Runtime.getRuntime().exec("ping -c 1 -W 2 $pingHost").waitFor() == 0) "✅" else "❌"
         } catch (e: Exception) {
-            "Fail"
+            "❌"
         }
     }
     private fun handleWifiStateChanged(intent: Intent) {

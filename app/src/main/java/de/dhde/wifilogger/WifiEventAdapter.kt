@@ -87,7 +87,7 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
             changes.add(ssidLine.toString())
         }
         
-        if (event.bssid != prev.bssid && event.bssid != null) changes.add("BSSID: ${event.bssid}")
+        // BSSID-Änderung in Details ausblenden (nur in Full View)
         
         // Granulare IP-Pruefung
         val currentIps = event.ipAddress?.split(", ")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
@@ -98,14 +98,12 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
             else changes.add("IPv4: $ip")
         }
 
-        if (event.gatewayReachability != prev.gatewayReachability) {
-            event.gatewayReachability?.let { changes.add(it) }
-        }
+        // Reachability nur in Full View anzeigen (oder hier auskommentieren/entfernen)
         
         // RSSI-Aenderungen filtern, wenn sich sonst nix ändert (nur anzeigen wenn SSID sich auch ändert oder in Full View)
         
         if (event.reason != prev.reason && event.reason != null && event.eventType != EventType.SIGNAL_CHANGE) {
-             if (event.reason != "IP changed" && event.reason != "Routing changed") {
+             if (event.reason != "IP changed" && event.reason != "Routing changed" && !event.reason.startsWith("BSSID changed")) {
                 changes.add(event.reason)
              }
         }
