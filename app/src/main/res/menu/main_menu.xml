@@ -5,4 +5,6 @@
     <item android:id="@+id/menu_delete_all" android:title="Alle loeschen" android:showAsAction="never" />
     <item android:id="@+id/menu_autostart" android:title="Autostart nach Boot"
         android:showAsAction="never" android:checkable="true" />
+    <item android:id="@+id/menu_show_rssi" android:title="Signalstaerke anzeigen"
+        android:showAsAction="never" android:checkable="true" />
 </menu>

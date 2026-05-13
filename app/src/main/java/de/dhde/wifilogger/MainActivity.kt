@@ -54,10 +54,15 @@ class MainActivity : AppCompatActivity() {
             setHasFixedSize(true)
         }
         viewModel.events.observe(this) { events ->
-            adapter.submitList(events)
-            binding.eventCountText.text = "${events.size} Ereignisse"
-            if (events.isNotEmpty()) binding.recyclerView.scrollToPosition(0)
+            val showRssi = prefs.getBoolean("show_rssi", false)
+            val filtered = if (showRssi) events else events.filter { it.eventType != EventType.SIGNAL_CHANGE }
+            adapter.submitList(filtered)
+            binding.eventCountText.text = "${filtered.size} Ereignisse"
+            if (filtered.isNotEmpty()) binding.recyclerView.scrollToPosition(0)
         }
+        
+        adapter.showRssi = prefs.getBoolean("show_rssi", false)
+        
         binding.fabToggle.setOnClickListener { checkPermissionsAndToggle() }
         binding.btnClear.setOnClickListener { confirmDeleteAll() }
         updateFabState()
@@ -101,6 +106,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         menu.findItem(R.id.menu_autostart)?.isChecked = prefs.getBoolean("autostart", false)
+        menu.findItem(R.id.menu_show_rssi)?.isChecked = prefs.getBoolean("show_rssi", false)
         return true
     }
 
@@ -112,6 +118,19 @@ class MainActivity : AppCompatActivity() {
             val v = !item.isChecked; item.isChecked = v
             prefs.edit().putBoolean("autostart", v).apply()
             Toast.makeText(this, if (v) "Autostart aktiviert" else "Autostart deaktiviert", Toast.LENGTH_SHORT).show(); true
+        }
+        R.id.menu_show_rssi -> {
+            val v = !item.isChecked; item.isChecked = v
+            prefs.edit().putBoolean("show_rssi", v).apply()
+            adapter.showRssi = v
+            
+            // Liste neu filtern und zuweisen
+            viewModel.events.value?.let { events ->
+                val filtered = if (v) events else events.filter { it.eventType != EventType.SIGNAL_CHANGE }
+                adapter.submitList(filtered)
+                binding.eventCountText.text = "${filtered.size} Ereignisse"
+            }
+            true
         }
         else -> super.onOptionsItemSelected(item)
     }
