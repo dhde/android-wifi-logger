@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="status_active">#2E7D32</color>
+    <color name="status_inactive">#757575</color>
+    <color name="event_connected">#4CAF50</color>
+    <color name="event_disconnected">#F44336</color>
+    <color name="event_roaming">#FF9800</color>
+    <color name="event_error">#B71C1C</color>
+    <color name="event_signal">#2196F3</color>
+    <color name="event_neutral">#9E9E9E</color>
+</resources>

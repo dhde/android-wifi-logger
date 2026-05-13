@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/menu_export" android:title="CSV exportieren" android:showAsAction="never" />
+    <item android:id="@+id/menu_delete_old" android:title="Alte Eintraege loeschen" android:showAsAction="never" />
+    <item android:id="@+id/menu_delete_all" android:title="Alle loeschen" android:showAsAction="never" />
+    <item android:id="@+id/menu_autostart" android:title="Autostart nach Boot"
+        android:showAsAction="never" android:checkable="true" />
+</menu>
