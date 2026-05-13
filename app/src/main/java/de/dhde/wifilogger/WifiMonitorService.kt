@@ -154,6 +154,29 @@ class WifiMonitorService : LifecycleService() {
         // BSSID aus Capabilities sichern (kommt meist erst hier zuverlässig an)
         val bssidFromCaps = info?.bssid
         if (bssidFromCaps != null && bssidFromCaps != "02:00:00:00:00:00" && bssidFromCaps != "00:00:00:00:00:00") {
+            if (currentBssid != null && currentBssid != bssidFromCaps && currentSsid != null) {
+                // BSSID changed - Roaming detected!
+                val ssid = currentSsid
+                val oldBssid = currentBssid
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val lp = connectivityManager.getLinkProperties(network)
+                    val dns4 = lp?.dnsServers?.find { it is java.net.Inet4Address }?.hostAddress
+                    val dns6 = lp?.dnsServers?.find { it is java.net.Inet6Address }?.hostAddress
+                    val isNetValidated = connectivityManager.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+                    
+                    val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
+                    val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
+                    val netStatus = if (isNetValidated) "Internet OK" else "Internet eingeschränkt"
+                    val reachability = "v4: $resDns4 | v6: $resDns6 | $netStatus"
+
+                    dao.insert(WifiEvent(
+                        eventType = EventType.ROAMING, ssid = ssid,
+                        bssid = bssidFromCaps, rssi = newRssi, frequency = info?.frequency ?: 0,
+                        ipAddress = currentIp, routes = currentRoutes, gatewayReachability = reachability,
+                        reason = "BSSID changed: $oldBssid -> $bssidFromCaps"
+                    ))
+                }
+            }
             currentBssid = bssidFromCaps
         }
         
