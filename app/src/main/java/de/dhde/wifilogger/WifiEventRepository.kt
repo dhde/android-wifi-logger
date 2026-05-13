@@ -1,4 +1,4 @@
-package de.wifilogger
+package de.dhde.wifilogger
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers

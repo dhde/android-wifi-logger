@@ -1,4 +1,4 @@
-package de.wifilogger
+package de.dhde.wifilogger
 
 import android.app.*
 import android.content.*
@@ -17,8 +17,8 @@ import kotlinx.coroutines.launch
 
 class WifiMonitorService : LifecycleService() {
     companion object {
-        const val ACTION_START = "de.wifilogger.START"
-        const val ACTION_STOP = "de.wifilogger.STOP"
+        const val ACTION_START = "de.dhde.wifilogger.START"
+        const val ACTION_STOP = "de.dhde.wifilogger.STOP"
         const val CHANNEL_ID = "wifi_logger_channel"
         const val NOTIFICATION_ID = 1
         private const val TAG = "WifiMonitorService"

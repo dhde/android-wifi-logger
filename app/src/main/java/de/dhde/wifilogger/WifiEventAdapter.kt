@@ -1,4 +1,4 @@
-package de.wifilogger
+package de.dhde.wifilogger
 
 import android.view.*
 import android.widget.TextView

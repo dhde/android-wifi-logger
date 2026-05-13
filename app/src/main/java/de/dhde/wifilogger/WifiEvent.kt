@@ -1,4 +1,4 @@
-package de.wifilogger
+package de.dhde.wifilogger
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

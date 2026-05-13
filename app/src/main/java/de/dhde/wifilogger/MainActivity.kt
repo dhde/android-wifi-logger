@@ -1,4 +1,4 @@
-package de.wifilogger
+package de.dhde.wifilogger
 
 import android.Manifest
 import android.content.*
@@ -15,7 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import de.wifilogger.databinding.ActivityMainBinding
+import de.dhde.wifilogger.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import java.io.File
 

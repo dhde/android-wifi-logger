@@ -1,4 +1,4 @@
-package de.wifilogger
+package de.dhde.wifilogger
 
 import androidx.lifecycle.LiveData
 import androidx.room.*
