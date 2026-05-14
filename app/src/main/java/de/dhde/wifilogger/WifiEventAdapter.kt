@@ -118,21 +118,31 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
                 val pre = prev.gatewayReachability
                 
                 // Hilfsfunktion zum Vergleichen und Markieren einzelner Segmente
-                fun highlightIfChanged(after: String, until: String) {
+                fun highlightIfChanged(label: String, after: String, until: String) {
                     val curVal = cur.substringAfter(after, "").substringBefore(until, "").trim()
                     val preVal = pre.substringAfter(after, "").substringBefore(until, "").trim()
                     
                     if (curVal.isNotEmpty() && curVal != preVal) {
-                        val startPos = cur.indexOf(curVal, cur.indexOf(after))
-                        if (startPos >= 0) {
-                            builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-                            builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        if (curVal == "-") {
+                            // Wenn es auf "-" wechselt, markieren wir das Label (v4/v6)
+                            val idx = cur.indexOf(label, cur.indexOf("Ping DNS"))
+                            if (idx >= 0) {
+                                builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + idx, lineStart + idx + label.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + idx, lineStart + idx + label.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            }
+                        } else {
+                            // Sonst markieren wir den Wert (✅/❌)
+                            val startPos = cur.indexOf(curVal, cur.indexOf(after))
+                            if (startPos >= 0) {
+                                builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            }
                         }
                     }
                 }
 
-                highlightIfChanged("v4: ", " |")
-                highlightIfChanged("v6: ", " |")
+                highlightIfChanged("v4", "v4: ", " |")
+                highlightIfChanged("v6", "v6: ", " |")
                 
                 // Internet Status (Spezialfall, da am Ende der Zeile)
                 val curNet = cur.substringAfter("Internet ", "").trim()
@@ -145,6 +155,11 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
                     }
                 }
             }
+        }
+
+        // Routes
+        if (event.routes != null) {
+            appendLine("Infos:\n${event.routes}", false)
         }
 
         // Previous SSID

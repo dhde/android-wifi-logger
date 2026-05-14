@@ -33,7 +33,52 @@ class WifiMonitorService : LifecycleService() {
     private var currentSsid: String? = null
     private var currentBssid: String? = null
     private var currentIp: String? = null
+    private var currentRoutes: String? = null
     private var lastRssi: Int? = null
+    private var lastFreq: Int? = null
+
+    private fun logEvent(type: EventType, reason: String? = null, rssi: Int? = null, freq: Int? = null) {
+        val ssid = currentSsid
+        val bssid = currentBssid
+        val ip = currentIp
+        val routes = currentRoutes
+        val rVal = rssi ?: lastRssi
+        val fVal = freq ?: lastFreq
+        
+        lifecycleScope.launch(Dispatchers.IO) {
+            val reachability = if (ssid != null) {
+                val network = connectivityManager.activeNetwork
+                if (network != null) {
+                    val lp = connectivityManager.getLinkProperties(network)
+                    val dnsServers = lp?.dnsServers ?: emptyList()
+                    val dns4 = dnsServers.filter { it is java.net.Inet4Address }.map { it.hostAddress }
+                    val dns6 = dnsServers.filter { it is java.net.Inet6Address }.map { it.hostAddress }
+                    
+                    val res4 = dns4.map { checkReachability(it, network) }.joinToString("")
+                    val res6 = dns6.map { checkReachability(it, network) }.joinToString("")
+                    
+                    val v4Str = if (res4.isEmpty()) "-" else res4
+                    val v6Str = if (res6.isEmpty()) "-" else res6
+                    
+                    val isNetValidated = connectivityManager.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+                    val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
+                    "Ping DNS v4: $v4Str | v6: $v6Str | $netStatus"
+                } else null
+            } else null
+
+            dao.insert(WifiEvent(
+                eventType = type,
+                ssid = ssid,
+                bssid = bssid,
+                ipAddress = ip,
+                routes = routes,
+                rssi = rVal,
+                frequency = fVal,
+                gatewayReachability = reachability,
+                reason = reason
+            ))
+        }
+    }
 
     private val wifiBroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -92,60 +137,58 @@ class WifiMonitorService : LifecycleService() {
 
     @Suppress("DEPRECATION")
     private fun handleNetworkAvailable(network: Network) {
-        val caps = connectivityManager.getNetworkCapabilities(network)
-        val lp = connectivityManager.getLinkProperties(network)
         val ssid = getSsid(network)
         val bssid = getBssid(network)
-        
-        val ipv4 = lp?.linkAddresses?.find { it.address is java.net.Inet4Address }?.address?.hostAddress
-        val ipv6 = lp?.linkAddresses?.find { it.address is java.net.Inet6Address && !it.address.isLinkLocalAddress }?.address?.hostAddress
-            ?: lp?.linkAddresses?.find { it.address is java.net.Inet6Address }?.address?.hostAddress
-        val ips = listOfNotNull(ipv4, ipv6).joinToString(", ")
-        
-        val gw4 = lp?.routes?.find { it.isDefaultRoute && it.gateway is java.net.Inet4Address }?.gateway?.hostAddress
-        val gw6 = lp?.routes?.find { it.isDefaultRoute && it.gateway is java.net.Inet6Address }?.gateway?.hostAddress
-        val dns4 = lp?.dnsServers?.find { it is java.net.Inet4Address }?.hostAddress
-        val dns6 = lp?.dnsServers?.find { it is java.net.Inet6Address }?.hostAddress
-
-        val routes = listOfNotNull(
-            gw4?.let { "  - IPv4 GW: $it" },
-            gw6?.let { "  - IPv6 GW: $it" },
-            dns4?.let { if (it != gw4) "  - DNS v4: $it" else null },
-            dns6?.let { if (it != gw6) "  - DNS v6: $it" else null }
-        ).joinToString("\n")
-        
+        val caps = connectivityManager.getNetworkCapabilities(network)
         val info = caps?.transportInfo as? WifiInfo
-        val freq = info?.frequency ?: 0
-        val rssi = info?.rssi ?: -127
         
-        lifecycleScope.launch(Dispatchers.IO) {
-            val isNetValidated = connectivityManager.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-            val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
-            val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
-            
-            val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
-            val reachability = "Ping DNS v4: $resDns4 | v6: $resDns6 | $netStatus"
-            
-            val wasOtherSsid = currentSsid != null && currentSsid != ssid
-            dao.insert(WifiEvent(
-                eventType = if (wasOtherSsid) EventType.ROAMING else EventType.CONNECTED,
-                ssid = ssid ?: "Unbekannt", bssid = bssid, rssi = rssi, frequency = freq,
-                ipAddress = ips, routes = routes, gatewayReachability = reachability,
-                previousSsid = if (wasOtherSsid) currentSsid else null
-            ))
-        }
-        currentSsid = ssid; currentBssid = bssid; currentIp = ips; currentRoutes = routes; lastRssi = rssi
+        currentSsid = ssid
+        currentBssid = bssid
+        lastRssi = info?.rssi
+        lastFreq = info?.frequency
+        
+        // IP und Routes initial sichern
+        val lp = connectivityManager.getLinkProperties(network)
+        if (lp != null) updateIpsAndRoutes(lp)
+        
+        logEvent(EventType.CONNECTED)
         updateNotification(ssid)
     }
 
+    private fun updateIpsAndRoutes(lp: LinkProperties) {
+        val ipv4 = lp.linkAddresses.find { it.address is java.net.Inet4Address }?.address?.hostAddress
+        val ipv6 = lp.linkAddresses.find { it.address is java.net.Inet6Address && !it.address.isLinkLocalAddress }?.address?.hostAddress
+            ?: lp.linkAddresses.find { it.address is java.net.Inet6Address }?.address?.hostAddress
+        currentIp = listOfNotNull(ipv4, ipv6).joinToString(", ")
+        
+        val gw4 = lp.routes.find { it.isDefaultRoute && it.gateway is java.net.Inet4Address }?.gateway?.hostAddress
+        val gw6 = lp.routes.find { it.isDefaultRoute && it.gateway is java.net.Inet6Address }?.gateway?.hostAddress
+        val dnsServers = lp.dnsServers
+        val dns4List = dnsServers.filter { it is java.net.Inet4Address }.map { it.hostAddress }
+        val dns6List = dnsServers.filter { it is java.net.Inet6Address }.map { it.hostAddress }
+
+        currentRoutes = buildString {
+            gw4?.let { append("  - IPv4 GW: $it\n") }
+            gw6?.let { append("  - IPv6 GW: $it\n") }
+            dns4List.forEach { append("  - DNS v4: $it\n") }
+            dns6List.forEach { append("  - DNS v6: $it\n") }
+        }.trimEnd()
+    }
+
+    @Suppress("DEPRECATION")
     private fun handleNetworkStateChanged(intent: Intent) {
-        val networkInfo = intent.getParcelableExtra<NetworkInfo>(WifiManager.EXTRA_NETWORK_INFO)
-        if (networkInfo?.state == NetworkInfo.State.CONNECTED && currentSsid == null) {
-            // Fallback: Wir sind verbunden, aber haben kein Event bekommen
+        val networkInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO, NetworkInfo::class.java)
+        } else {
+            intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO)
+        }
+        
+        val state = networkInfo?.state
+        
+        if (state == NetworkInfo.State.CONNECTED && currentSsid == null) {
             forceCheckCurrentStatus("Fallback: NetworkStateChanged")
-        } else if (networkInfo?.state == NetworkInfo.State.DISCONNECTED && currentSsid != null) {
-            // Fallback: Getrennt
-            handleNetworkLost(connectivityManager.activeNetwork ?: return)
+        } else if (state == NetworkInfo.State.DISCONNECTED && currentSsid != null) {
+            connectivityManager.activeNetwork?.let { handleNetworkLost(it) }
         }
     }
 
@@ -153,9 +196,7 @@ class WifiMonitorService : LifecycleService() {
         val network = connectivityManager.activeNetwork
         if (network == null) {
             if (forceLog) {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    dao.insert(WifiEvent(eventType = EventType.DISCONNECTED, reason = "Manuelle Pruefung: Nicht verbunden"))
-                }
+                logEvent(EventType.DISCONNECTED, reason = "Manuelle Pruefung: Nicht verbunden")
             }
             return
         }
@@ -172,98 +213,40 @@ class WifiMonitorService : LifecycleService() {
     }
 
     private fun handleNetworkLost(network: Network) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            dao.insert(WifiEvent(
-                eventType = EventType.DISCONNECTED,
-                ssid = currentSsid, bssid = currentBssid, reason = "Network lost"
-            ))
-        }
-        currentSsid = null; currentBssid = null; currentIp = null
+        logEvent(EventType.DISCONNECTED, reason = "Network lost")
+        currentSsid = null; currentBssid = null; currentIp = null; currentRoutes = null
         updateNotification(null)
     }
 
     private fun handleCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
         val info = caps.transportInfo as? WifiInfo
         val newRssi = info?.rssi ?: -127
+        val newFreq = info?.frequency ?: 0
         
-        // BSSID aus Capabilities sichern (kommt meist erst hier zuverlässig an)
         val bssidFromCaps = info?.bssid
-        if (bssidFromCaps != null && bssidFromCaps != "02:00:00:00:00:00" && bssidFromCaps != "00:00:00:00:00:00") {
-            if (currentBssid != null && currentBssid != bssidFromCaps && currentSsid != null) {
-                // BSSID changed - Roaming detected!
-                val ssid = currentSsid
-                val oldBssid = currentBssid
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val lp = connectivityManager.getLinkProperties(network)
-                    val dns4 = lp?.dnsServers?.find { it is java.net.Inet4Address }?.hostAddress
-                    val dns6 = lp?.dnsServers?.find { it is java.net.Inet6Address }?.hostAddress
-                    val isNetValidated = connectivityManager.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-                    
-                    val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
-                    val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
-                    val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
-                    val reachability = "Ping DNS v4: $resDns4 | v6: $resDns6 | $netStatus"
-
-                    dao.insert(WifiEvent(
-                        eventType = EventType.ROAMING, ssid = ssid,
-                        bssid = bssidFromCaps, rssi = newRssi, frequency = info?.frequency ?: 0,
-                        ipAddress = currentIp, routes = currentRoutes, gatewayReachability = reachability
-                    ))
-                }
-            }
+        val dummies = setOf("02:00:00:00:00:00", "00:00:00:00:00:00")
+        
+        if (bssidFromCaps != null && bssidFromCaps !in dummies && currentBssid != null && currentBssid != bssidFromCaps) {
             currentBssid = bssidFromCaps
+            logEvent(EventType.ROAMING, rssi = newRssi, freq = newFreq)
         }
         
         if (lastRssi != null && Math.abs(newRssi - lastRssi!!) >= 10 && currentSsid != null) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                dao.insert(WifiEvent(
-                    eventType = EventType.SIGNAL_CHANGE, ssid = currentSsid,
-                    bssid = currentBssid, rssi = newRssi, frequency = info?.frequency ?: 0,
-                    reason = "RSSI changed: $lastRssi -> $newRssi dBm"
-                ))
-            }
+            logEvent(EventType.SIGNAL_CHANGE, reason = "RSSI changed: $lastRssi -> $newRssi dBm", rssi = newRssi, freq = newFreq)
             lastRssi = newRssi
         }
+        lastFreq = newFreq
     }
 
-    private var currentRoutes: String? = null
-
     private fun handleLinkPropertiesChanged(network: Network, lp: LinkProperties) {
-        val ipv4 = lp.linkAddresses.find { it.address is java.net.Inet4Address }?.address?.hostAddress
-        val ipv6 = lp.linkAddresses.find { it.address is java.net.Inet6Address && !it.address.isLinkLocalAddress }?.address?.hostAddress
-            ?: lp.linkAddresses.find { it.address is java.net.Inet6Address }?.address?.hostAddress
-        val ips = listOfNotNull(ipv4, ipv6).joinToString(", ")
+        val oldIp = currentIp
+        val oldRoutes = currentRoutes
+        updateIpsAndRoutes(lp)
         
-        val gw4 = lp.routes.find { it.isDefaultRoute && it.gateway is java.net.Inet4Address }?.gateway?.hostAddress
-        val gw6 = lp.routes.find { it.isDefaultRoute && it.gateway is java.net.Inet6Address }?.gateway?.hostAddress
-        val dns4 = lp.dnsServers.find { it is java.net.Inet4Address }?.hostAddress
-        val dns6 = lp.dnsServers.find { it is java.net.Inet6Address }?.hostAddress
-
-        val routes = listOfNotNull(
-            gw4?.let { "  - IPv4 GW: $it" },
-            gw6?.let { "  - IPv6 GW: $it" },
-            dns4?.let { if (it != gw4) "  - DNS v4: $it" else null },
-            dns6?.let { if (it != gw6) "  - DNS v6: $it" else null }
-        ).joinToString("\n")
-
-        val changed = (ips != currentIp || routes != currentRoutes)
-        if (changed && ips.isNotBlank()) {
-             lifecycleScope.launch(Dispatchers.IO) {
-                val isNetValidated = connectivityManager.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-                val resDns4 = dns4?.let { checkReachability(it, network) } ?: "-"
-                val resDns6 = dns6?.let { checkReachability(it, network) } ?: "-"
-                
-                val netStatus = if (isNetValidated) "🌐 Internet OK" else "⚠️ Internet eingeschränkt"
-                val reachability = "Ping DNS v4: $resDns4 | v6: $resDns6 | $netStatus"
-                
-                dao.insert(WifiEvent(
-                    eventType = EventType.IP_CHANGE, ssid = currentSsid,
-                    bssid = currentBssid, ipAddress = ips, routes = routes,
-                    gatewayReachability = reachability
-                ))
+        if (currentIp != oldIp || currentRoutes != oldRoutes) {
+            if (currentIp != null && currentIp!!.isNotBlank() && currentSsid != null) {
+                logEvent(EventType.IP_CHANGE)
             }
-            currentIp = ips
-            currentRoutes = routes
         }
     }
 
