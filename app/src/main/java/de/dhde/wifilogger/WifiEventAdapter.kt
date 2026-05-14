@@ -106,23 +106,42 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
             else if (ip != "0.0.0.0") appendField("IPv4: ", ip, isNew)
         }
 
-        // Reachability - Spezial-Highlighting für Status-Symbole
+        // Reachability - Granulares Highlighting für Status-Teile
         if (event.gatewayReachability != null) {
             val start = builder.length
             if (start > 0) builder.append("\n")
             val lineStart = builder.length
             builder.append(event.gatewayReachability)
             
-            if (prev != null && event.gatewayReachability != prev.gatewayReachability) {
-                // Nur die Status-Symbole und "OK"/"FAIL" markieren
-                val text = event.gatewayReachability
-                val highlights = listOf("✅", "❌", "🌐", "OK", "FAILED", "⚠️")
-                highlights.forEach { h ->
-                    var idx = text.indexOf(h)
-                    while (idx >= 0) {
-                        builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + idx, lineStart + idx + h.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-                        builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + idx, lineStart + idx + h.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-                        idx = text.indexOf(h, idx + 1)
+            if (prev?.gatewayReachability != null) {
+                val cur = event.gatewayReachability
+                val pre = prev.gatewayReachability
+                
+                // Hilfsfunktion zum Vergleichen und Markieren einzelner Segmente
+                fun highlightIfChanged(after: String, until: String) {
+                    val curVal = cur.substringAfter(after, "").substringBefore(until, "").trim()
+                    val preVal = pre.substringAfter(after, "").substringBefore(until, "").trim()
+                    
+                    if (curVal.isNotEmpty() && curVal != preVal) {
+                        val startPos = cur.indexOf(curVal, cur.indexOf(after))
+                        if (startPos >= 0) {
+                            builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                    }
+                }
+
+                highlightIfChanged("v4: ", " |")
+                highlightIfChanged("v6: ", " |")
+                
+                // Internet Status (Spezialfall, da am Ende der Zeile)
+                val curNet = cur.substringAfter("Internet ", "").trim()
+                val preNet = pre.substringAfter("Internet ", "").trim()
+                if (curNet.isNotEmpty() && curNet != preNet) {
+                    val startPos = cur.indexOf(curNet, cur.indexOf("Internet "))
+                    if (startPos >= 0) {
+                        builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + startPos, lineStart + startPos + curNet.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + startPos, lineStart + startPos + curNet.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
                 }
             }
