@@ -1,5 +1,8 @@
 package de.dhde.wifilogger
 
+import android.graphics.Typeface
+import android.text.*
+import android.text.style.*
 import android.view.*
 import android.widget.TextView
 import androidx.recyclerview.widget.*
@@ -43,7 +46,7 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
         holder.indicator.setBackgroundColor(eventColor(holder.itemView, event.eventType))
 
         val details = if (isExpanded) {
-            buildFullDetails(event)
+            buildFullDetails(event, prevEvent)
         } else {
             buildDiffDetails(event, prevEvent)
         }
@@ -52,27 +55,71 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
         holder.tvDetails.visibility = if (details.isBlank()) View.GONE else View.VISIBLE
     }
 
-    private fun buildFullDetails(event: WifiEvent): String = buildString {
-        append("SSID: ${event.ssid ?: "nicht verbunden"}")
+    private fun buildFullDetails(event: WifiEvent, prev: WifiEvent?): CharSequence {
+        val builder = SpannableStringBuilder()
+        val highlightColor = 0xFFFFD54F.toInt() // Material Amber 300
+
+        fun appendLine(text: String, isChanged: Boolean) {
+            val start = builder.length
+            if (start > 0) builder.append("\n")
+            val lineStart = builder.length
+            builder.append(text)
+            if (isChanged && prev != null) {
+                builder.setSpan(ForegroundColorSpan(highlightColor), lineStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(StyleSpan(Typeface.BOLD), lineStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+
+        // SSID & RSSI
+        val ssidBase = "SSID: ${event.ssid ?: "nicht verbunden"}"
+        val ssidLine = StringBuilder(ssidBase)
+        var ssidChanged = prev != null && event.ssid != prev.ssid
         if (showRssi) {
-            event.band?.let { append(" ($it)") }
-            event.rssi?.let { append(" ($it dBm)") }
+            event.band?.let { ssidLine.append(" ($it)") }
+            event.rssi?.let { ssidLine.append(" ($it dBm)") }
+            if (prev != null && (event.band != prev.band || event.rssi != prev.rssi)) ssidChanged = true
         }
-        
-        append("\nBSSID: ${event.bssid ?: "nicht verbunden"}")
-        val ips = event.ipAddress?.split(", ") ?: emptyList()
-        ips.forEach { ip ->
-            if (ip.contains(":")) append("\nIPv6: $ip")
-            else if (ip != "0.0.0.0") append("\nIPv4: $ip")
+        appendLine(ssidLine.toString(), ssidChanged)
+
+        // BSSID
+        val bssidChanged = prev != null && event.bssid != prev.bssid
+        appendLine("BSSID: ${event.bssid ?: "nicht verbunden"}", bssidChanged)
+
+        // IPs
+        val currentIps = event.ipAddress?.split(", ")?.filter { it.isNotBlank() } ?: emptyList()
+        val prevIps = prev?.ipAddress?.split(", ")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+        currentIps.forEach { ip ->
+            val isNew = ip !in prevIps
+            if (ip.contains(":")) appendLine("IPv6: $ip", isNew)
+            else if (ip != "0.0.0.0") appendLine("IPv4: $ip", isNew)
         }
-        event.gatewayReachability?.let { append("\n$it") }
-        event.reason?.let { append("\n$it") }
-        event.previousSsid?.let { append("\nVorher: $it") }
+
+        // Reachability
+        if (event.gatewayReachability != null) {
+            val reachChanged = prev != null && event.gatewayReachability != prev.gatewayReachability
+            appendLine(event.gatewayReachability, reachChanged)
+        }
+
+        // Previous SSID
+        if (event.previousSsid != null) {
+            appendLine("Vorher: ${event.previousSsid}", false)
+        }
+
+        // Reason (filtered)
+        val cleanReason = event.reason?.trim()
+        if (cleanReason != null && cleanReason != "IP changed" && cleanReason != "Routing changed" && 
+            !cleanReason.startsWith("BSSID changed") && !cleanReason.startsWith("RSSI changed") &&
+            cleanReason != "Network lost") {
+            val reasonChanged = prev != null && event.reason != prev.reason
+            appendLine("Grund: $cleanReason", reasonChanged)
+        }
+
+        return builder
     }
 
     private fun buildDiffDetails(event: WifiEvent, prev: WifiEvent?): String = buildString {
         if (prev == null) {
-            append(buildFullDetails(event))
+            append(buildFullDetails(event, null))
             return@buildString
         }
 
@@ -105,8 +152,10 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
         // RSSI-Aenderungen filtern, wenn sich sonst nix ändert (nur anzeigen wenn SSID sich auch ändert oder in Full View)
         
         if (event.reason != prev.reason && event.reason != null && event.eventType != EventType.SIGNAL_CHANGE) {
-             if (event.reason != "IP changed" && event.reason != "Routing changed" && !event.reason.startsWith("BSSID changed")) {
-                changes.add(event.reason)
+             val cleanReason = event.reason.trim()
+             if (cleanReason != "IP changed" && cleanReason != "Routing changed" && 
+                 !cleanReason.startsWith("BSSID changed") && !cleanReason.startsWith("RSSI changed")) {
+                changes.add(cleanReason)
              }
         }
 

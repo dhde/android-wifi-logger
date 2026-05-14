@@ -196,8 +196,7 @@ class WifiMonitorService : LifecycleService() {
                     dao.insert(WifiEvent(
                         eventType = EventType.ROAMING, ssid = ssid,
                         bssid = bssidFromCaps, rssi = newRssi, frequency = info?.frequency ?: 0,
-                        ipAddress = currentIp, routes = currentRoutes, gatewayReachability = reachability,
-                        reason = "BSSID changed: $oldBssid -> $bssidFromCaps"
+                        ipAddress = currentIp, routes = currentRoutes, gatewayReachability = reachability
                     ))
                 }
             }
@@ -249,8 +248,7 @@ class WifiMonitorService : LifecycleService() {
                 dao.insert(WifiEvent(
                     eventType = EventType.IP_CHANGE, ssid = currentSsid,
                     bssid = currentBssid, ipAddress = ips, routes = routes,
-                    gatewayReachability = reachability,
-                    reason = if (routes != currentRoutes) "Routing changed" else "IP changed"
+                    gatewayReachability = reachability
                 ))
             }
             currentIp = ips
