@@ -87,7 +87,9 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
             changes.add(ssidLine.toString())
         }
         
-        // BSSID-Änderung in Details ausblenden (nur in Full View)
+        if (event.bssid != prev.bssid && event.bssid != null) {
+            changes.add("BSSID: ${event.bssid}")
+        }
         
         // Granulare IP-Pruefung
         val currentIps = event.ipAddress?.split(", ")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()

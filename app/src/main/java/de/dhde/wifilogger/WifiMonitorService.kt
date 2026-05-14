@@ -36,8 +36,9 @@ class WifiMonitorService : LifecycleService() {
 
     private val wifiBroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == WifiManager.WIFI_STATE_CHANGED_ACTION) {
-                handleWifiStateChanged(intent)
+            when (intent.action) {
+                WifiManager.WIFI_STATE_CHANGED_ACTION -> handleWifiStateChanged(intent)
+                WifiManager.NETWORK_STATE_CHANGED_ACTION -> handleNetworkStateChanged(intent)
             }
         }
     }
@@ -134,6 +135,29 @@ class WifiMonitorService : LifecycleService() {
         }
         currentSsid = ssid; currentBssid = bssid; currentIp = ips; currentRoutes = routes; lastRssi = rssi
         updateNotification(ssid)
+    }
+
+    private fun handleNetworkStateChanged(intent: Intent) {
+        val networkInfo = intent.getParcelableExtra<NetworkInfo>(WifiManager.EXTRA_NETWORK_INFO)
+        if (networkInfo?.state == NetworkInfo.State.CONNECTED && currentSsid == null) {
+            // Fallback: Wir sind verbunden, aber haben kein Event bekommen
+            forceCheckCurrentStatus("Fallback: NetworkStateChanged")
+        } else if (networkInfo?.state == NetworkInfo.State.DISCONNECTED && currentSsid != null) {
+            // Fallback: Getrennt
+            handleNetworkLost(connectivityManager.activeNetwork ?: return)
+        }
+    }
+
+    private fun forceCheckCurrentStatus(source: String) {
+        val network = connectivityManager.activeNetwork ?: return
+        val caps = connectivityManager.getNetworkCapabilities(network) ?: return
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            val ssid = getSsid(network)
+            if (ssid != null && currentSsid == null) {
+                Log.i(TAG, "Force sync: Re-triggering connection from $source")
+                handleNetworkAvailable(network)
+            }
+        }
     }
 
     private fun handleNetworkLost(network: Network) {
@@ -296,6 +320,7 @@ class WifiMonitorService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         if (intent?.action == ACTION_STOP) { stopMonitoring(); return START_NOT_STICKY }
         startMonitoring()
+        forceCheckCurrentStatus("onStartCommand")
         return START_STICKY
     }
 
@@ -308,7 +333,11 @@ class WifiMonitorService : LifecycleService() {
             startForeground(NOTIFICATION_ID, buildNotification("Ueberwache WLAN..."))
         }
         registerNetworkCallback()
-        registerReceiver(wifiBroadcastReceiver, IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION))
+        val filter = IntentFilter().apply {
+            addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
+        }
+        registerReceiver(wifiBroadcastReceiver, filter)
         lifecycleScope.launch(Dispatchers.IO) {
             dao.insert(WifiEvent(eventType = EventType.APP_START, reason = "Logging gestartet"))
         }
