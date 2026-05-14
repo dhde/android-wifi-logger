@@ -70,39 +70,67 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
             }
         }
 
+        fun appendField(label: String, value: String, isChanged: Boolean) {
+            val start = builder.length
+            if (start > 0) builder.append("\n")
+            builder.append(label)
+            val valueStart = builder.length
+            builder.append(value)
+            if (isChanged && prev != null) {
+                builder.setSpan(ForegroundColorSpan(highlightColor), valueStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(StyleSpan(Typeface.BOLD), valueStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+
         // SSID & RSSI
-        val ssidBase = "SSID: ${event.ssid ?: "nicht verbunden"}"
-        val ssidLine = StringBuilder(ssidBase)
+        val ssidVal = event.ssid ?: "nicht verbunden"
+        val ssidLine = StringBuilder(ssidVal)
         var ssidChanged = prev != null && event.ssid != prev.ssid
         if (showRssi) {
             event.band?.let { ssidLine.append(" ($it)") }
             event.rssi?.let { ssidLine.append(" ($it dBm)") }
             if (prev != null && (event.band != prev.band || event.rssi != prev.rssi)) ssidChanged = true
         }
-        appendLine(ssidLine.toString(), ssidChanged)
+        appendField("SSID: ", ssidLine.toString(), ssidChanged)
 
         // BSSID
         val bssidChanged = prev != null && event.bssid != prev.bssid
-        appendLine("BSSID: ${event.bssid ?: "nicht verbunden"}", bssidChanged)
+        appendField("BSSID: ", event.bssid ?: "nicht verbunden", bssidChanged)
 
         // IPs
         val currentIps = event.ipAddress?.split(", ")?.filter { it.isNotBlank() } ?: emptyList()
         val prevIps = prev?.ipAddress?.split(", ")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
         currentIps.forEach { ip ->
             val isNew = ip !in prevIps
-            if (ip.contains(":")) appendLine("IPv6: $ip", isNew)
-            else if (ip != "0.0.0.0") appendLine("IPv4: $ip", isNew)
+            if (ip.contains(":")) appendField("IPv6: ", ip, isNew)
+            else if (ip != "0.0.0.0") appendField("IPv4: ", ip, isNew)
         }
 
-        // Reachability
+        // Reachability - Spezial-Highlighting für Status-Symbole
         if (event.gatewayReachability != null) {
-            val reachChanged = prev != null && event.gatewayReachability != prev.gatewayReachability
-            appendLine(event.gatewayReachability, reachChanged)
+            val start = builder.length
+            if (start > 0) builder.append("\n")
+            val lineStart = builder.length
+            builder.append(event.gatewayReachability)
+            
+            if (prev != null && event.gatewayReachability != prev.gatewayReachability) {
+                // Nur die Status-Symbole und "OK"/"FAIL" markieren
+                val text = event.gatewayReachability
+                val highlights = listOf("✅", "❌", "🌐", "OK", "FAILED", "⚠️")
+                highlights.forEach { h ->
+                    var idx = text.indexOf(h)
+                    while (idx >= 0) {
+                        builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + idx, lineStart + idx + h.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + idx, lineStart + idx + h.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        idx = text.indexOf(h, idx + 1)
+                    }
+                }
+            }
         }
 
         // Previous SSID
         if (event.previousSsid != null) {
-            appendLine("Vorher: ${event.previousSsid}", false)
+            appendField("Vorher: ", event.previousSsid, false)
         }
 
         // Reason (filtered)
@@ -111,7 +139,7 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
             !cleanReason.startsWith("BSSID changed") && !cleanReason.startsWith("RSSI changed") &&
             cleanReason != "Network lost") {
             val reasonChanged = prev != null && event.reason != prev.reason
-            appendLine("Grund: $cleanReason", reasonChanged)
+            appendField("Grund: ", cleanReason, reasonChanged)
         }
 
         return builder
