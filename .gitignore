@@ -87,3 +87,8 @@ captures/
 .idea/tasks.xml
 .idea/deploymentTargetDropDown.xml
 .idea/deploymentTargetSelector.xml
+
+# Custom ignores
+app-icons/
+.kotlin/
+.vscode/
