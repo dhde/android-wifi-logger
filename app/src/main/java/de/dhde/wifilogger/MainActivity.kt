@@ -65,6 +65,7 @@ class MainActivity : AppCompatActivity() {
         
         binding.fabToggle.setOnClickListener { checkPermissionsAndToggle() }
         binding.btnClear.setOnClickListener { confirmDeleteAll() }
+        binding.btnSync.setOnClickListener { manualSync() }
         updateFabState()
         
         // Die gesamte Leiste unten auch zum Starten/Stoppen nutzbar machen
@@ -79,6 +80,18 @@ class MainActivity : AppCompatActivity() {
         }
         if (missing.isEmpty()) toggleService()
         else permissionLauncher.launch(missing.toTypedArray())
+    }
+
+    private fun manualSync() {
+        if (!WifiMonitorService.isRunning) {
+            Toast.makeText(this, "Logging muss aktiv sein", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(this, WifiMonitorService::class.java).apply {
+            action = WifiMonitorService.ACTION_SYNC
+        }
+        startForegroundService(intent)
+        Toast.makeText(this, "Verbindung wird geprüft...", Toast.LENGTH_SHORT).show()
     }
 
     private fun toggleService() {

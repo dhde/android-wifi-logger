@@ -19,6 +19,7 @@ class WifiMonitorService : LifecycleService() {
     companion object {
         const val ACTION_START = "de.dhde.wifilogger.START"
         const val ACTION_STOP = "de.dhde.wifilogger.STOP"
+        const val ACTION_SYNC = "de.dhde.wifilogger.SYNC"
         const val CHANNEL_ID = "wifi_logger_channel"
         const val NOTIFICATION_ID = 1
         private const val TAG = "WifiMonitorService"
@@ -148,14 +149,24 @@ class WifiMonitorService : LifecycleService() {
         }
     }
 
-    private fun forceCheckCurrentStatus(source: String) {
-        val network = connectivityManager.activeNetwork ?: return
+    private fun forceCheckCurrentStatus(source: String, forceLog: Boolean = false) {
+        val network = connectivityManager.activeNetwork
+        if (network == null) {
+            if (forceLog) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    dao.insert(WifiEvent(eventType = EventType.DISCONNECTED, reason = "Manuelle Pruefung: Nicht verbunden"))
+                }
+            }
+            return
+        }
         val caps = connectivityManager.getNetworkCapabilities(network) ?: return
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
             val ssid = getSsid(network)
-            if (ssid != null && currentSsid == null) {
-                Log.i(TAG, "Force sync: Re-triggering connection from $source")
-                handleNetworkAvailable(network)
+            if (ssid != null) {
+                if (currentSsid == null || forceLog) {
+                    Log.i(TAG, "Force sync: Re-triggering connection from $source")
+                    handleNetworkAvailable(network)
+                }
             }
         }
     }
@@ -316,9 +327,14 @@ class WifiMonitorService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (intent?.action == ACTION_STOP) { stopMonitoring(); return START_NOT_STICKY }
-        startMonitoring()
-        forceCheckCurrentStatus("onStartCommand")
+        when (intent?.action) {
+            ACTION_STOP -> { stopMonitoring(); return START_NOT_STICKY }
+            ACTION_SYNC -> { forceCheckCurrentStatus("Manual", forceLog = true) }
+            else -> { 
+                startMonitoring()
+                forceCheckCurrentStatus("onStartCommand")
+            }
+        }
         return START_STICKY
     }
 
