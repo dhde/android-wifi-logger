@@ -2,6 +2,8 @@
 
 Ein moderner, privatsphäre-orientierter WiFi-Monitor für Android, der Netzwerkwechsel, Signalstärken und Routing-Informationen in Echtzeit protokolliert.
 
+![WiFi Logger Screenshot](docs/wifi_logger_preview.png)
+
 ## ✨ Features
 - **Passives Logging:** Die App läuft im Hintergrund und protokolliert Ereignisse, ohne aktiv zu scannen (schont den Akku).
 - **Detaillierte Netzwerk-Infos:** Erfasst IPv4, IPv6, Default Gateways und führt Gateway-Erreichbarkeitsprüfungen (Ping) durch.
