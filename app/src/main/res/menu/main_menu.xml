@@ -1,10 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/menu_export" android:title="CSV exportieren" android:showAsAction="never" />
-    <item android:id="@+id/menu_delete_old" android:title="Alte Eintraege loeschen" android:showAsAction="never" />
-    <item android:id="@+id/menu_delete_all" android:title="Alle loeschen" android:showAsAction="never" />
-    <item android:id="@+id/menu_autostart" android:title="Autostart nach Boot"
-        android:showAsAction="never" android:checkable="true" />
-    <item android:id="@+id/menu_show_rssi" android:title="Signalstaerke anzeigen"
-        android:showAsAction="never" android:checkable="true" />
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    
+    <item
+        android:id="@+id/action_info"
+        android:icon="@android:drawable/ic_menu_info_details"
+        android:title="Info"
+        app:showAsAction="ifRoom"
+        app:iconTint="@color/white" />
+
+    <item
+        android:id="@+id/menu_export"
+        android:title="Exportieren (CSV)"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_autostart"
+        android:title="Autostart nach Boot"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_show_rssi"
+        android:title="Signaländerungen anzeigen"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_delete_old"
+        android:title="Alte Logs löschen (> 7 Tage)"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_delete_all"
+        android:title="Alle Logs löschen"
+        app:showAsAction="never" />
 </menu>

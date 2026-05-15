@@ -8,4 +8,6 @@
     <color name="event_error">#B71C1C</color>
     <color name="event_signal">#2196F3</color>
     <color name="event_neutral">#9E9E9E</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
 </resources>

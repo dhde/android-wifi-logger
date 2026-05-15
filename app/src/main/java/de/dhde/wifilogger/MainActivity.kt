@@ -127,6 +127,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
+        R.id.action_info -> {
+            startActivity(Intent(this, InfoActivity::class.java))
+            true
+        }
         R.id.menu_export -> { exportCsv(); true }
         R.id.menu_delete_old -> { showDeleteDialog(); true }
         R.id.menu_delete_all -> { confirmDeleteAll(); true }
