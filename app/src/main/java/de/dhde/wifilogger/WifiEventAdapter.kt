@@ -83,15 +83,36 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
         }
 
         // SSID & RSSI
+        val startSSID = builder.length
+        if (startSSID > 0) builder.append("\n")
+        builder.append("SSID: ")
+        
         val ssidVal = event.ssid ?: "nicht verbunden"
-        val ssidLine = StringBuilder(ssidVal)
-        var ssidChanged = prev != null && event.ssid != prev.ssid
-        if (showRssi) {
-            event.band?.let { ssidLine.append(" ($it)") }
-            event.rssi?.let { ssidLine.append(" ($it dBm)") }
-            if (prev != null && (event.band != prev.band || event.rssi != prev.rssi)) ssidChanged = true
+        val ssidStart = builder.length
+        builder.append(ssidVal)
+        if (prev != null && event.ssid != prev.ssid) {
+            builder.setSpan(ForegroundColorSpan(highlightColor), ssidStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            builder.setSpan(StyleSpan(Typeface.BOLD), ssidStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        appendField("SSID: ", ssidLine.toString(), ssidChanged)
+        
+        if (showRssi) {
+            event.band?.let {
+                val bStart = builder.length
+                builder.append(" ($it)")
+                if (prev != null && event.band != prev.band) {
+                    builder.setSpan(ForegroundColorSpan(highlightColor), bStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(StyleSpan(Typeface.BOLD), bStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+            event.rssi?.let {
+                val rStart = builder.length
+                builder.append(" ($it dBm)")
+                if (prev != null && event.rssi != prev.rssi) {
+                    builder.setSpan(ForegroundColorSpan(highlightColor), rStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(StyleSpan(Typeface.BOLD), rStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+        }
 
         // BSSID
         val bssidChanged = prev != null && event.bssid != prev.bssid
@@ -124,18 +145,28 @@ class WifiEventAdapter : ListAdapter<WifiEvent, WifiEventAdapter.ViewHolder>(Dif
                     
                     if (curVal.isNotEmpty() && curVal != preVal) {
                         if (curVal == "-") {
-                            // Wenn es auf "-" wechselt, markieren wir das Label (v4/v6)
                             val idx = cur.indexOf(label, cur.indexOf("Ping DNS"))
                             if (idx >= 0) {
                                 builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + idx, lineStart + idx + label.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                                 builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + idx, lineStart + idx + label.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                             }
                         } else {
-                            // Sonst markieren wir den Wert (✅/❌)
-                            val startPos = cur.indexOf(curVal, cur.indexOf(after))
-                            if (startPos >= 0) {
-                                builder.setSpan(ForegroundColorSpan(highlightColor), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-                                builder.setSpan(StyleSpan(Typeface.BOLD), lineStart + startPos, lineStart + startPos + curVal.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            val startPosInCur = cur.indexOf(curVal, cur.indexOf(after))
+                            if (startPosInCur >= 0) {
+                                // Granularer Vergleich: Nur die Symbole markieren, die sich geändert haben
+                                for (i in curVal.indices) {
+                                    val c = curVal[i]
+                                    val p = if (i < preVal.length) preVal[i] else null
+                                    if (c != p) {
+                                        // Emoji-Check: Emojis können 2 Chars lang sein (Surrogates)
+                                        val isHigh = c.isHighSurrogate()
+                                        val length = if (isHigh && i + 1 < curVal.length) 2 else 1
+                                        val absPos = lineStart + startPosInCur + i
+                                        builder.setSpan(ForegroundColorSpan(highlightColor), absPos, absPos + length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                        builder.setSpan(StyleSpan(Typeface.BOLD), absPos, absPos + length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                        if (isHigh) continue // Skip next char if surrogate
+                                    }
+                                }
                             }
                         }
                     }
