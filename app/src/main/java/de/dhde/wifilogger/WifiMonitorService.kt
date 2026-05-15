@@ -229,9 +229,8 @@ class WifiMonitorService : LifecycleService() {
         if (bssidFromCaps != null && bssidFromCaps !in dummies && currentBssid != null && currentBssid != bssidFromCaps) {
             currentBssid = bssidFromCaps
             logEvent(EventType.ROAMING, rssi = newRssi, freq = newFreq)
-        }
-        
-        if (lastRssi != null && Math.abs(newRssi - lastRssi!!) >= 10 && currentSsid != null) {
+            lastRssi = newRssi // RSSI Stand nach Roaming merken
+        } else if (lastRssi != null && Math.abs(newRssi - lastRssi!!) >= 10 && currentSsid != null) {
             logEvent(EventType.SIGNAL_CHANGE, reason = "RSSI changed: $lastRssi -> $newRssi dBm", rssi = newRssi, freq = newFreq)
             lastRssi = newRssi
         }
