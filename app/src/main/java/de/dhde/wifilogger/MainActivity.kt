@@ -56,9 +56,12 @@ class MainActivity : AppCompatActivity() {
         viewModel.events.observe(this) { events ->
             val showRssi = prefs.getBoolean("show_rssi", false)
             val filtered = if (showRssi) events else events.filter { it.eventType != EventType.SIGNAL_CHANGE }
-            adapter.submitList(filtered)
+            adapter.submitList(filtered) {
+                if (filtered.isNotEmpty()) {
+                    binding.recyclerView.scrollToPosition(0)
+                }
+            }
             binding.eventCountText.text = "${filtered.size} Ereignisse"
-            if (filtered.isNotEmpty()) binding.recyclerView.scrollToPosition(0)
         }
         
         adapter.showRssi = prefs.getBoolean("show_rssi", false)
