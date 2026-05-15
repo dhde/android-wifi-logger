@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.*
 
 @TypeConverters(Converters::class)
-@Database(entities = [WifiEvent::class], version = 3, exportSchema = false)
+@Database(entities = [WifiEvent::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun wifiEventDao(): WifiEventDao
     companion object {

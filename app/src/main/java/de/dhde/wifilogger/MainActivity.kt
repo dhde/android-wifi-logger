@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels()
     private lateinit var adapter: WifiEventAdapter
     private lateinit var prefs: SharedPreferences
+    private lateinit var aliasManager: BssidAliasManager
 
     private val permissions = mutableListOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -47,7 +48,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         prefs = getSharedPreferences("wifi_logger_prefs", MODE_PRIVATE)
-        adapter = WifiEventAdapter()
+        aliasManager = BssidAliasManager(this)
+        adapter = WifiEventAdapter(aliasManager) { bssid -> showBssidEditDialog(bssid) }
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             this.adapter = this@MainActivity.adapter
@@ -183,5 +185,48 @@ class MainActivity : AppCompatActivity() {
                 viewModel.deleteAll()
                 Toast.makeText(this, "Geloescht", Toast.LENGTH_SHORT).show()
             }.setNegativeButton("Abbrechen", null).show()
+    }
+
+    private fun showBssidEditDialog(bssid: String) {
+        val input = android.widget.EditText(this).apply {
+            setText(aliasManager.getAliasOnly(bssid))
+            hint = "Name eingeben"
+            setSingleLine()
+        }
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 24)
+            val params = android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            input.layoutParams = params
+            addView(input)
+
+            val checkbox = android.widget.CheckBox(this@MainActivity).apply {
+                text = "MAC-Adresse zusätzlich anzeigen"
+                isChecked = aliasManager.showMacWithAlias
+                layoutParams = params.apply { topMargin = 16 }
+            }
+            addView(checkbox)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("BSSID benennen")
+            .setMessage("Name für $bssid:")
+            .setView(container)
+            .setPositiveButton("Speichern") { _, _ ->
+                aliasManager.saveAlias(bssid, input.text.toString())
+                val checkbox = container.getChildAt(1) as android.widget.CheckBox
+                aliasManager.showMacWithAlias = checkbox.isChecked
+                adapter.notifyDataSetChanged()
+                Toast.makeText(this, "Gespeichert", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("Name löschen") { _, _ ->
+                aliasManager.saveAlias(bssid, "")
+                adapter.notifyDataSetChanged()
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
     }
 }
