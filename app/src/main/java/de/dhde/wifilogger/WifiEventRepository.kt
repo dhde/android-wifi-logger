@@ -17,14 +17,15 @@ class WifiEventRepository(context: Context) {
         val events = dao.getRecentEvents(2000)
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
         buildString {
-            appendLine("timestamp,datetime,event_type,ssid,bssid,rssi_dbm,band,ip_address,routes,gw_status,reason,previous_ssid")
+            appendLine("timestamp,datetime,event_type,ssid,bssid,rssi_dbm,band,ip_address,routes,gw_status,reason,previous_ssid,link_speed,channel_width")
             for (e in events) appendLine(listOf(
                 e.timestamp, sdf.format(Date(e.timestamp)), e.eventType.name,
                 e.ssid?.replace(",", ";") ?: "", e.bssid ?: "",
                 e.rssi ?: "", e.band ?: "", e.ipAddress ?: "", 
                 e.routes?.replace(",", ";") ?: "", e.gatewayReachability ?: "",
                 e.reason?.replace(",", ";") ?: "",
-                e.previousSsid?.replace(",", ";") ?: ""
+                e.previousSsid?.replace(",", ";") ?: "",
+                e.linkSpeed ?: "", e.channelWidth ?: ""
             ).joinToString(","))
         }
     }

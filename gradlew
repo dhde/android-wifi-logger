@@ -14,4 +14,4 @@ else
     JAVACMD="java"
 fi
 
-exec "$JAVACMD" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+exec "$JAVACMD" --enable-native-access=ALL-UNNAMED -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"

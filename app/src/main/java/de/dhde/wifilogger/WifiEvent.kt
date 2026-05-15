@@ -22,8 +22,20 @@ data class WifiEvent(
     val routes: String? = null,
     val gatewayReachability: String? = null,
     val reason: String? = null,
-    val previousSsid: String? = null
+    val previousSsid: String? = null,
+    val linkSpeed: Int? = null,
+    val channelWidth: Int? = null
 ) {
+    val channel: Int?
+        get() = frequency?.let {
+            when {
+                it in 2412..2484 -> (it - 2412) / 5 + 1
+                it in 5170..5825 -> (it - 5170) / 5 + 34
+                it in 5945..7105 -> (it - 5945) / 5 + 1
+                else -> null
+            }
+        }
+
     val band: String?
         get() = frequency?.let {
             when {

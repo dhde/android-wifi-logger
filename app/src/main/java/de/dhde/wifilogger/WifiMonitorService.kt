@@ -36,14 +36,38 @@ class WifiMonitorService : LifecycleService() {
     private var currentRoutes: String? = null
     private var lastRssi: Int? = null
     private var lastFreq: Int? = null
+    private var lastLinkSpeed: Int? = null
+    private var lastSsid: String? = null
+    private var lastBssid: String? = null
+    private var lastChannelWidth: Int? = null
 
-    private fun logEvent(type: EventType, reason: String? = null, rssi: Int? = null, freq: Int? = null) {
+    @Suppress("DEPRECATION")
+    private fun getChannelWidth(bssid: String?): Int? {
+        if (bssid == null) return null
+        return try {
+            val match = wifiManager.scanResults.find { it.BSSID == bssid }
+            match?.let {
+                when (it.channelWidth) {
+                    0 -> 20 // CHANNEL_WIDTH_20MHZ
+                    1 -> 40 // CHANNEL_WIDTH_40MHZ
+                    2 -> 80 // CHANNEL_WIDTH_80MHZ
+                    3 -> 160 // CHANNEL_WIDTH_160MHZ
+                    4 -> 80 // CHANNEL_WIDTH_80MHZ_PLUS_MHZ
+                    5 -> 320 // CHANNEL_WIDTH_320MHZ
+                    else -> null
+                }
+            }
+        } catch (e: SecurityException) { null }
+    }
+
+    private fun logEvent(type: EventType, reason: String? = null, rssi: Int? = null, freq: Int? = null, linkSpeed: Int? = null, channelWidth: Int? = null) {
         val ssid = currentSsid
         val bssid = currentBssid
         val ip = currentIp
         val routes = currentRoutes
         val rVal = rssi ?: lastRssi
         val fVal = freq ?: lastFreq
+        val sVal = linkSpeed ?: lastLinkSpeed
         
         lifecycleScope.launch(Dispatchers.IO) {
             val reachability = if (ssid != null) {
@@ -51,8 +75,8 @@ class WifiMonitorService : LifecycleService() {
                 if (network != null) {
                     val lp = connectivityManager.getLinkProperties(network)
                     val dnsServers = lp?.dnsServers ?: emptyList()
-                    val dns4 = dnsServers.filter { it is java.net.Inet4Address }.map { it.hostAddress }
-                    val dns6 = dnsServers.filter { it is java.net.Inet6Address }.map { it.hostAddress }
+                    val dns4 = dnsServers.filter { it is java.net.Inet4Address }.map { it.hostAddress }.filterNotNull()
+                    val dns6 = dnsServers.filter { it is java.net.Inet6Address }.map { it.hostAddress }.filterNotNull()
                     
                     val res4 = dns4.map { checkReachability(it, network) }.joinToString("")
                     val res6 = dns6.map { checkReachability(it, network) }.joinToString("")
@@ -75,8 +99,17 @@ class WifiMonitorService : LifecycleService() {
                 rssi = rVal,
                 frequency = fVal,
                 gatewayReachability = reachability,
-                reason = reason
+                reason = reason,
+                previousSsid = if (type == EventType.NETWORK_CHANGE) lastSsid else null,
+                linkSpeed = sVal,
+                channelWidth = channelWidth ?: lastChannelWidth
             ))
+            if (type != EventType.SIGNAL_CHANGE) {
+                lastSsid = ssid
+                lastBssid = bssid
+                lastLinkSpeed = sVal
+                if (channelWidth != null) lastChannelWidth = channelWidth
+            }
         }
     }
 
@@ -146,12 +179,15 @@ class WifiMonitorService : LifecycleService() {
         currentBssid = bssid
         lastRssi = info?.rssi
         lastFreq = info?.frequency
+        lastLinkSpeed = info?.linkSpeed
+        val cw = getChannelWidth(bssid)
+        if (cw != null) lastChannelWidth = cw
         
         // IP und Routes initial sichern
         val lp = connectivityManager.getLinkProperties(network)
         if (lp != null) updateIpsAndRoutes(lp)
         
-        logEvent(EventType.CONNECTED)
+        logEvent(EventType.CONNECTED, linkSpeed = info?.linkSpeed, channelWidth = cw)
         updateNotification(ssid)
     }
 
@@ -164,8 +200,8 @@ class WifiMonitorService : LifecycleService() {
         val gw4 = lp.routes.find { it.isDefaultRoute && it.gateway is java.net.Inet4Address }?.gateway?.hostAddress
         val gw6 = lp.routes.find { it.isDefaultRoute && it.gateway is java.net.Inet6Address }?.gateway?.hostAddress
         val dnsServers = lp.dnsServers
-        val dns4List = dnsServers.filter { it is java.net.Inet4Address }.map { it.hostAddress }
-        val dns6List = dnsServers.filter { it is java.net.Inet6Address }.map { it.hostAddress }
+        val dns4List = dnsServers.filter { it is java.net.Inet4Address }.map { it.hostAddress }.filterNotNull()
+        val dns6List = dnsServers.filter { it is java.net.Inet6Address }.map { it.hostAddress }.filterNotNull()
 
         currentRoutes = buildString {
             gw4?.let { append("  - IPv4 GW: $it\n") }
@@ -225,14 +261,18 @@ class WifiMonitorService : LifecycleService() {
         
         val bssidFromCaps = info?.bssid
         val dummies = setOf("02:00:00:00:00:00", "00:00:00:00:00:00")
+        val cw = getChannelWidth(bssidFromCaps)
         
         if (bssidFromCaps != null && bssidFromCaps !in dummies && currentBssid != null && currentBssid != bssidFromCaps) {
             currentBssid = bssidFromCaps
-            logEvent(EventType.ROAMING, rssi = newRssi, freq = newFreq)
-            lastRssi = newRssi // RSSI Stand nach Roaming merken
-        } else if (lastRssi != null && Math.abs(newRssi - lastRssi!!) >= 10 && currentSsid != null) {
-            logEvent(EventType.SIGNAL_CHANGE, reason = "RSSI changed: $lastRssi -> $newRssi dBm", rssi = newRssi, freq = newFreq)
+            logEvent(EventType.ROAMING, rssi = newRssi, freq = newFreq, linkSpeed = info?.linkSpeed, channelWidth = cw)
             lastRssi = newRssi
+            lastLinkSpeed = info?.linkSpeed
+            if (cw != null) lastChannelWidth = cw
+        } else if (lastRssi != null && Math.abs(newRssi - lastRssi!!) >= 10 && currentSsid != null) {
+            logEvent(EventType.SIGNAL_CHANGE, reason = "RSSI changed: $lastRssi -> $newRssi dBm", rssi = newRssi, freq = newFreq, linkSpeed = info?.linkSpeed)
+            lastRssi = newRssi
+            lastLinkSpeed = info?.linkSpeed
         }
         lastFreq = newFreq
     }

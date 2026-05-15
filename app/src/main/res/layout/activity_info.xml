@@ -28,7 +28,7 @@
         android:id="@+id/txtVersion"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Version 0.1.5"
+        android:text="Version 0.1.6"
         android:textColor="#888888"
         android:textSize="14sp" />
 
