@@ -61,6 +61,7 @@ local.properties
 app/build/
 .cxx/
 *.apk
+*.aab
 *.ap_
 *.dex
 *.class
