@@ -8,7 +8,6 @@ import android.widget.TextView
 import androidx.recyclerview.widget.*
 import java.text.SimpleDateFormat
 import java.util.*
-import android.text.method.LinkMovementMethod
 
 class WifiEventAdapter(
     private val aliasManager: BssidAliasManager,
@@ -23,9 +22,9 @@ class WifiEventAdapter(
         val tvEvent: TextView = view.findViewById(R.id.tv_event)
         val tvDetails: TextView = view.findViewById(R.id.tv_details)
         val indicator: View = view.findViewById(R.id.event_indicator)
+        val btnEditBssid: View = view.findViewById(R.id.btn_edit_bssid)
 
         init {
-            tvDetails.movementMethod = BetterLinkMovementMethod.instance
             view.setOnClickListener {
                 val position = adapterPosition
                 if (position != RecyclerView.NO_POSITION) {
@@ -58,6 +57,13 @@ class WifiEventAdapter(
 
         holder.tvDetails.text = details
         holder.tvDetails.visibility = if (details.isBlank()) View.GONE else View.VISIBLE
+
+        // Stift-Button nur im aufgeklappten Zustand und wenn BSSID vorhanden
+        val showEdit = isExpanded && event.bssid != null
+        holder.btnEditBssid.visibility = if (showEdit) View.VISIBLE else View.GONE
+        holder.btnEditBssid.setOnClickListener {
+            event.bssid?.let { onBssidEditClick(it) }
+        }
     }
 
     private fun buildFullDetails(event: WifiEvent, prev: WifiEvent?): CharSequence {
@@ -132,26 +138,12 @@ class WifiEventAdapter(
         val bssidChanged = prev != null && event.bssid != prev.bssid
         val bssidStart = builder.length
         if (bssidStart > 0) builder.append("\n")
-        val labelStart = builder.length
         builder.append("BSSID: ")
         val valueStart = builder.length
         builder.append(aliasManager.getName(event.bssid))
-        if (event.bssid != null) {
-            builder.append(" ✏️")
-        }
         if (bssidChanged) {
             builder.setSpan(ForegroundColorSpan(highlightColor), valueStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
             builder.setSpan(StyleSpan(Typeface.BOLD), valueStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        if (event.bssid != null) {
-            builder.setSpan(object : ClickableSpan() {
-                override fun onClick(widget: View) {
-                    onBssidEditClick(event.bssid)
-                }
-                override fun updateDrawState(ds: TextPaint) {
-                    ds.isUnderlineText = false
-                }
-            }, labelStart, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
 
         // IPs
@@ -323,42 +315,5 @@ class WifiEventAdapter(
     companion object DiffCallback : DiffUtil.ItemCallback<WifiEvent>() {
         override fun areItemsTheSame(a: WifiEvent, b: WifiEvent) = a.id == b.id
         override fun areContentsTheSame(a: WifiEvent, b: WifiEvent) = a == b
-    }
-}
-
-class BetterLinkMovementMethod : LinkMovementMethod() {
-    override fun onTouchEvent(widget: TextView, buffer: Spannable, event: MotionEvent): Boolean {
-        val action = event.action
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_DOWN) {
-            var x = event.x.toInt()
-            var y = event.y.toInt()
-
-            x -= widget.totalPaddingLeft
-            y -= widget.totalPaddingTop
-            x += widget.scrollX
-            y += widget.scrollY
-
-            val layout = widget.layout
-            val line = layout.getLineForVertical(y)
-            val off = layout.getOffsetForHorizontal(line, x.toFloat())
-
-            val link = buffer.getSpans(off, off, ClickableSpan::class.java)
-
-            if (link.isNotEmpty()) {
-                if (action == MotionEvent.ACTION_UP) {
-                    link[0].onClick(widget)
-                } else if (action == MotionEvent.ACTION_DOWN) {
-                    Selection.setSelection(buffer, buffer.getSpanStart(link[0]), buffer.getSpanEnd(link[0]))
-                }
-                return true
-            } else {
-                Selection.removeSelection(buffer)
-            }
-        }
-        return false // Wichtig: Damit normale Klicks zum Expandieren an den parent gehen!
-    }
-
-    companion object {
-        val instance = BetterLinkMovementMethod()
     }
 }
