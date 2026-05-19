@@ -40,6 +40,9 @@ class WifiMonitorService : LifecycleService() {
     private var lastSsid: String? = null
     private var lastBssid: String? = null
     private var lastChannelWidth: Int? = null
+    private var currentNetwork: Network? = null
+    private val disconnectHandler = Handler(Looper.getMainLooper())
+    private var pendingDisconnectRunnable: Runnable? = null
 
     @Suppress("DEPRECATION")
     private fun getChannelWidth(bssid: String?): Int? {
@@ -170,11 +173,15 @@ class WifiMonitorService : LifecycleService() {
 
     @Suppress("DEPRECATION")
     private fun handleNetworkAvailable(network: Network) {
+        // Pending disconnect abbrechen – neues Netzwerk da
+        cancelPendingDisconnect()
+
         val ssid = getSsid(network)
         val bssid = getBssid(network)
         val caps = connectivityManager.getNetworkCapabilities(network)
         val info = caps?.transportInfo as? WifiInfo
-        
+
+        currentNetwork = network
         currentSsid = ssid
         currentBssid = bssid
         lastRssi = info?.rssi
@@ -224,7 +231,9 @@ class WifiMonitorService : LifecycleService() {
         if (state == NetworkInfo.State.CONNECTED && currentSsid == null) {
             forceCheckCurrentStatus("Fallback: NetworkStateChanged")
         } else if (state == NetworkInfo.State.DISCONNECTED && currentSsid != null) {
-            connectivityManager.activeNetwork?.let { handleNetworkLost(it) }
+            // Nicht sofort disconnect – verzögert verifizieren
+            Log.d(TAG, "Broadcast meldet DISCONNECTED, starte Verifikation...")
+            scheduleDisconnectCheck("Broadcast: NETWORK_STATE_CHANGED")
         }
     }
 
@@ -249,9 +258,49 @@ class WifiMonitorService : LifecycleService() {
     }
 
     private fun handleNetworkLost(network: Network) {
-        logEvent(EventType.DISCONNECTED, reason = "Network lost")
-        currentSsid = null; currentBssid = null; currentIp = null; currentRoutes = null
-        updateNotification(null)
+        // Nur reagieren wenn es unser aktives Netzwerk ist
+        if (network != currentNetwork) {
+            Log.d(TAG, "Ignoriere onLost für fremdes Network-Objekt")
+            return
+        }
+        // Verzögertes Disconnect – gibt Android Zeit, ein Ersatz-Network zu liefern
+        scheduleDisconnectCheck("onLost")
+    }
+
+    private fun scheduleDisconnectCheck(source: String) {
+        cancelPendingDisconnect()
+        pendingDisconnectRunnable = Runnable {
+            // Prüfen ob WiFi wirklich weg ist
+            val activeNet = connectivityManager.activeNetwork
+            if (activeNet != null) {
+                val caps = connectivityManager.getNetworkCapabilities(activeNet)
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                    Log.i(TAG, "Disconnect-Check ($source): WiFi noch aktiv – kein Disconnect")
+                    // State mit dem aktiven Netzwerk synchronisieren
+                    currentNetwork = activeNet
+                    val ssid = getSsid(activeNet)
+                    if (ssid != null && currentSsid == null) {
+                        handleNetworkAvailable(activeNet)
+                    }
+                    return@Runnable
+                }
+            }
+            // WiFi ist wirklich getrennt
+            Log.i(TAG, "Disconnect-Check ($source): WiFi wirklich getrennt")
+            logEvent(EventType.DISCONNECTED, reason = "Network lost ($source)")
+            currentSsid = null; currentBssid = null; currentIp = null; currentRoutes = null
+            currentNetwork = null
+            updateNotification(null)
+        }
+        disconnectHandler.postDelayed(pendingDisconnectRunnable!!, 1500)
+    }
+
+    private fun cancelPendingDisconnect() {
+        pendingDisconnectRunnable?.let {
+            disconnectHandler.removeCallbacks(it)
+            Log.d(TAG, "Pending Disconnect abgebrochen")
+        }
+        pendingDisconnectRunnable = null
     }
 
     private fun handleCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
@@ -332,10 +381,12 @@ class WifiMonitorService : LifecycleService() {
     }
     private fun handleWifiStateChanged(intent: Intent) {
         if (intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, -1) == WifiManager.WIFI_STATE_DISABLED) {
+            cancelPendingDisconnect()
             lifecycleScope.launch(Dispatchers.IO) {
                 dao.insert(WifiEvent(eventType = EventType.DISCONNECTED, ssid = currentSsid, reason = "WiFi disabled"))
             }
-            currentSsid = null; currentBssid = null
+            currentSsid = null; currentBssid = null; currentIp = null; currentRoutes = null
+            currentNetwork = null
         }
     }
 
@@ -395,6 +446,7 @@ class WifiMonitorService : LifecycleService() {
 
     private fun stopMonitoring() {
         isRunning = false
+        cancelPendingDisconnect()
         try {
             connectivityManager.unregisterNetworkCallback(networkCallback)
             unregisterReceiver(wifiBroadcastReceiver)
