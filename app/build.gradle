@@ -5,13 +5,13 @@ plugins {
 }
 android {
     namespace 'de.dhde.wifilogger'
-    compileSdk 35
+    compileSdk 37
     defaultConfig {
         applicationId "de.dhde.wifilogger"
         minSdk 26
-        targetSdk 35
-        versionCode 16
-        versionName "0.1.8"
+        targetSdk 37
+        versionCode 17
+        versionName "0.2.0"
     }
 
     signingConfigs {
